@@ -557,9 +557,10 @@
 
   <!-- Acciones -->
   <div class="actions">
+    <button class="btn" id="edit-toggle" onclick="toggleEditMode()" style="background:var(--purple); color:#fff; border-color:var(--purple)">✏️ Modo Visualización</button>
     <button class="btn btn-print-light" onclick="printLight()">🖨️ Imprimir (Blanco)</button>
     <button class="btn btn-print-dark"  onclick="printDark()">🌙 Imprimir (Negro)</button>
-    <button class="btn btn-clear" onclick="clearAll()">🗑 Limpiar Todo</button>
+    <button class="btn btn-clear" id="btn-clear" onclick="clearAll()" style="display:none">🗑 Limpiar Todo</button>
   </div>
 
   <!-- Leyenda -->
@@ -659,6 +660,7 @@
     };
 
     // ── Estado ──────────────────────────────────────────────────
+    let isEditMode = false;
     // data[day][shiftId] = "Nombre" | null
     let data   = {};
     let db     = null;
@@ -671,6 +673,26 @@
         SHIFTS.forEach(s => { d[day][s.id] = null; });
       });
       return d;
+    }
+
+    function toggleEditMode() {
+      isEditMode = !isEditMode;
+      const btn = document.getElementById('edit-toggle');
+      const btnClear = document.getElementById('btn-clear');
+      if (isEditMode) {
+        btn.innerHTML = '✅ Modo Edición (Activo)';
+        btn.style.background = 'var(--green)';
+        btn.style.borderColor = 'var(--green)';
+        btnClear.style.display = 'inline-flex';
+        toast('✏️ Modo edición activado');
+      } else {
+        btn.innerHTML = '✏️ Modo Visualización';
+        btn.style.background = 'var(--purple)';
+        btn.style.borderColor = 'var(--purple)';
+        btnClear.style.display = 'none';
+        toast('👁 Modo de solo lectura');
+      }
+      render();
     }
 
     // ── Firebase ─────────────────────────────────────────────────
@@ -791,18 +813,24 @@
           if (name) {
             // Celda ocupada
             const card = el('div', 'name-card');
-            card.innerHTML = `
-              <span class="name-text">${esc(name)}</span>
-              <button class="ic-btn edit" title="Editar" onclick="openModal('${esc(day)}','${shift.id}',true)">✏️</button>
-              <button class="ic-btn del"  title="Quitar"  onclick="removeName('${esc(day)}','${shift.id}')">✕</button>
-            `;
+            if (isEditMode) {
+              card.innerHTML = `
+                <span class="name-text">${esc(name)}</span>
+                <button class="ic-btn edit" title="Editar" onclick="openModal('${esc(day)}','${shift.id}',true)">✏️</button>
+                <button class="ic-btn del"  title="Quitar"  onclick="removeName('${esc(day)}','${shift.id}')">✕</button>
+              `;
+            } else {
+              card.innerHTML = `<span class="name-text" style="font-size:1.05rem">${esc(name)}</span>`;
+            }
             cell.appendChild(card);
           } else {
             // Celda vacía
-            const btn = el('button', 'add-btn');
-            btn.innerHTML = '＋ Agregar nombre';
-            btn.onclick = () => openModal(day, shift.id, false);
-            cell.appendChild(btn);
+            if (isEditMode) {
+              const btn = el('button', 'add-btn');
+              btn.innerHTML = '＋ Agregar nombre';
+              btn.onclick = () => openModal(day, shift.id, false);
+              cell.appendChild(btn);
+            }
           }
 
           grid.appendChild(cell);
