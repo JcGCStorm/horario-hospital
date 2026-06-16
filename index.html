@@ -212,8 +212,8 @@
     }
     .grid {
       display: grid;
-      grid-template-columns: 120px repeat(7, 1fr);
-      min-width: 800px;
+      /* Forzar ancho mínimo por columna para que iOS Safari no recorte los últimos días */
+      grid-template-columns: 110px repeat(7, minmax(130px, 1fr));
       border-radius: var(--radius);
       overflow: hidden;
       border: 1px solid rgba(98,114,164,.25);
