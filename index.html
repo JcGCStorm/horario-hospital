@@ -1000,6 +1000,15 @@
       }
     }
 
+    function _saveAdminInputs() {
+      _tempShifts.forEach((s, i) => {
+        const lblInput = document.getElementById('admin-label-'+i);
+        const hrsInput = document.getElementById('admin-hours-'+i);
+        if (lblInput) s.label = lblInput.value.trim();
+        if (hrsInput) s.hours = hrsInput.value.trim();
+      });
+    }
+
     function renderAdminList() {
       const list = document.getElementById('admin-shifts-list');
       list.innerHTML = '';
@@ -1011,10 +1020,17 @@
         div.style.borderRadius = 'var(--rsm)';
         div.style.position = 'relative';
         
+        const isFirst = (i === 0);
+        const isLast = (i === _tempShifts.length - 1);
+
         div.innerHTML = `
-          <button class="ic-btn del" style="position:absolute; top:10px; right:10px; background:var(--red); color:#fff; width:24px; height:24px; font-size:12px;" onclick="adminRemoveShift(${i})">✕</button>
+          <div style="position:absolute; top:10px; right:10px; display:flex; gap:4px;">
+            <button class="ic-btn" style="background:var(--border); color:#fff; width:24px; height:24px; font-size:12px; ${isFirst ? 'opacity:0.3; cursor:not-allowed;' : ''}" onclick="adminMoveShift(${i}, -1)" ${isFirst ? 'disabled' : ''}>↑</button>
+            <button class="ic-btn" style="background:var(--border); color:#fff; width:24px; height:24px; font-size:12px; ${isLast ? 'opacity:0.3; cursor:not-allowed;' : ''}" onclick="adminMoveShift(${i}, 1)" ${isLast ? 'disabled' : ''}>↓</button>
+            <button class="ic-btn del" style="background:var(--red); color:#fff; width:24px; height:24px; font-size:12px;" onclick="adminRemoveShift(${i})">✕</button>
+          </div>
           <label style="font-size:.8rem; color:var(--cyan); display:block; margin-bottom:5px;">Nombre del Turno</label>
-          <input type="text" id="admin-label-${i}" value="${esc(s.label)}" placeholder="Ej. Matutino" style="margin-bottom:10px; font-size:.9rem;" />
+          <input type="text" id="admin-label-${i}" value="${esc(s.label)}" placeholder="Ej. Matutino" style="margin-bottom:10px; font-size:.9rem; width:calc(100% - 90px);" />
           <label style="font-size:.8rem; color:var(--cyan); display:block; margin-bottom:5px;">Horas</label>
           <input type="text" id="admin-hours-${i}" value="${esc(s.hours)}" placeholder="Ej. 11:00 – 11:20" style="font-size:.9rem;" />
         `;
@@ -1029,13 +1045,7 @@
     }
 
     function adminAddShift() {
-      // Leer valores actuales antes de re-renderizar para no perder lo que han escrito
-      _tempShifts.forEach((s, i) => {
-        const lblInput = document.getElementById('admin-label-'+i);
-        const hrsInput = document.getElementById('admin-hours-'+i);
-        if (lblInput) s.label = lblInput.value.trim();
-        if (hrsInput) s.hours = hrsInput.value.trim();
-      });
+      _saveAdminInputs();
       _tempShifts.push({ id: 's_' + Date.now(), label: 'Nuevo Turno', hours: '00:00 – 00:00' });
       renderAdminList();
       const list = document.getElementById('admin-shifts-list');
@@ -1047,6 +1057,15 @@
         _tempShifts.splice(index, 1);
         renderAdminList();
       }
+    }
+
+    function adminMoveShift(index, direction) {
+      _saveAdminInputs();
+      if (index + direction < 0 || index + direction >= _tempShifts.length) return;
+      const temp = _tempShifts[index];
+      _tempShifts[index] = _tempShifts[index + direction];
+      _tempShifts[index + direction] = temp;
+      renderAdminList();
     }
 
     function closeAdmin() {
