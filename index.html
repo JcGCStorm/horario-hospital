@@ -827,6 +827,13 @@
 
     function confirmModal() {
       const name = document.getElementById('m-input').value.trim();
+      
+      // Easter egg
+      const nameLower = name.toLowerCase();
+      if (nameLower === 'cmnhectorin' || nameLower === 'galamierdas') {
+        alert('Puro Bodrio');
+      }
+
       if (!name) {
         const inp = document.getElementById('m-input');
         inp.style.borderColor = 'var(--red)';
