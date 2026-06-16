@@ -567,11 +567,8 @@
   </div>
 
   <!-- Leyenda -->
-  <div class="legend">
-    <span class="leg"><span class="leg-dot" style="background:var(--noc-acc)"></span>Nocturno (12:00 hrs)</span>
-    <span class="leg"><span class="leg-dot" style="background:var(--noc2-acc)"></span>Nocturno (06:00 hrs)</span>
-    <span class="leg"><span class="leg-dot" style="background:var(--mat-acc)"></span>Matutino (11:00 hrs)</span>
-    <span class="leg"><span class="leg-dot" style="background:var(--ves-acc)"></span>Vespertino (18:00 hrs)</span>
+  <div class="legend" id="legend-container">
+    <!-- Se llena dinámicamente -->
   </div>
 
   <!-- Grid -->
@@ -597,25 +594,12 @@
   <!-- Modal Admin -->
   <div class="overlay" id="admin-overlay" onclick="adminOverlayClick(event)">
     <div class="modal" style="width: min(420px, 92vw);">
-      <h2 style="color:var(--orange)">Configuración</h2>
-      <p class="mmeta">Edita las horas de los turnos</p>
+      <h2 style="color:var(--orange)">Configuración de Turnos</h2>
+      <p class="mmeta">Agrega, edita o quita turnos</p>
       
-      <div style="margin-bottom: 1rem;">
-        <label style="font-size: .8rem; color: var(--noc-acc);">Nocturno (12:00 hrs)</label>
-        <input id="admin-noc" type="text" placeholder="Ej. 12:00 – 12:20" onkeydown="if(event.key==='Enter')saveAdmin()" />
-      </div>
-      <div style="margin-bottom: 1rem;">
-        <label style="font-size: .8rem; color: var(--noc2-acc);">Nocturno (06:00 hrs)</label>
-        <input id="admin-noc2" type="text" placeholder="Ej. 06:00 – 06:20" onkeydown="if(event.key==='Enter')saveAdmin()" />
-      </div>
-      <div style="margin-bottom: 1rem;">
-        <label style="font-size: .8rem; color: var(--mat-acc);">Matutino (11:00 hrs)</label>
-        <input id="admin-mat" type="text" placeholder="Ej. 11:00 – 11:20" onkeydown="if(event.key==='Enter')saveAdmin()" />
-      </div>
-      <div style="margin-bottom: 1rem;">
-        <label style="font-size: .8rem; color: var(--ves-acc);">Vespertino (18:00 hrs)</label>
-        <input id="admin-ves" type="text" placeholder="Ej. 18:00 – 18:20" onkeydown="if(event.key==='Enter')saveAdmin()" />
-      </div>
+      <div id="admin-shifts-list" style="margin-bottom: 1rem; max-height: 50vh; overflow-y: auto; padding-right: 5px;"></div>
+      
+      <button class="btn" style="background:var(--card); color:var(--cyan); width:100%; margin-bottom: 1rem; border: 1px dashed var(--border);" onclick="adminAddShift()">＋ Agregar Turno</button>
 
       <div class="mactions">
         <button class="btn-cancel" onclick="closeAdmin()">Cancelar</button>
@@ -654,8 +638,19 @@
     };
     /* ============================================================ */
 
-    // ── Constantes ──────────────────────────────────────────────
+    // ── Constantes y Paleta ─────────────────────────────────────
     const DAYS   = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+    
+    const PALETTE = [
+      { bg: '#162416', acc: '#50FA7B' }, // verde
+      { bg: '#2D2319', acc: '#FFB86C' }, // naranja
+      { bg: '#1B3048', acc: '#8BE9FD' }, // azul
+      { bg: '#2E1A30', acc: '#FF79C6' }, // rosa
+      { bg: '#1B1B3A', acc: '#BD93F9' }, // morado
+      { bg: '#3A1B1B', acc: '#FF5555' }, // rojo
+      { bg: '#2A2A2A', acc: '#F1FA8C' }  // amarillo
+    ];
+
     let SHIFTS = [
       { id:'noc', label:'Nocturno',   hours:'12:00 – 12:20' },
       { id:'noc2',label:'Nocturno',   hours:'06:00 – 06:20' },
@@ -732,14 +727,20 @@
         setConn('offline', 'Error de conexión');
       });
 
-      // Escuchar configuración de horarios
-      db.ref('config/shifts').on('value', snap => {
+      // Escuchar configuración de horarios (nuevo formato array)
+      db.ref('config/shiftsArr').on('value', snap => {
         if (snap.exists()) {
-          const conf = snap.val();
-          SHIFTS.forEach(s => {
-            if (conf[s.id]) s.hours = conf[s.id];
-          });
+          SHIFTS = snap.val();
           render();
+        } else {
+          // Fallback a configuración antigua
+          db.ref('config/shifts').once('value').then(oldSnap => {
+            if (oldSnap.exists()) {
+              const conf = oldSnap.val();
+              SHIFTS.forEach(s => { if (conf[s.id]) s.hours = conf[s.id]; });
+              render();
+            }
+          });
         }
       });
 
@@ -787,6 +788,14 @@
 
     // ── Render ───────────────────────────────────────────────────
     function render() {
+      // 1. Render Legend
+      const legContainer = document.getElementById('legend-container');
+      legContainer.innerHTML = '';
+      SHIFTS.forEach((shift, index) => {
+        const color = PALETTE[index % PALETTE.length];
+        legContainer.innerHTML += `<span class="leg"><span class="leg-dot" style="background:${color.acc}"></span>${esc(shift.label)} (${esc(shift.hours)})</span>`;
+      });
+
       const grid = document.getElementById('grid');
       grid.innerHTML = '';
 
@@ -799,24 +808,19 @@
       });
 
       // Filas de turno
-      SHIFTS.forEach(shift => {
+      SHIFTS.forEach((shift, index) => {
+        const color = PALETTE[index % PALETTE.length];
         // Etiqueta lateral
         const lbl = el('div', 'slabel');
-        lbl.innerHTML = `<span class="sname">${shift.label}</span><span class="shours">${shift.hours}</span>`;
-        lbl.classList.add(shift.id); // para el color de fondo en CSS
-        // Nota: el color de fondo lo ponemos por la clase del padre .mat/.ves/.noc
-        // Creamos un wrapper de fila con esa clase
-        // En realidad con display:contents no se puede — así que forzamos el color aquí:
-        const bgMap = { mat:'var(--mat-bg)', ves:'var(--ves-bg)', noc:'var(--noc-bg)', noc2:'var(--noc2-bg)' };
-        const accMap= { mat:'var(--mat-acc)', ves:'var(--ves-acc)', noc:'var(--noc-acc)', noc2:'var(--noc2-acc)' };
-        lbl.style.background = bgMap[shift.id];
-        lbl.style.color      = accMap[shift.id];
+        lbl.innerHTML = `<span class="sname">${esc(shift.label)}</span><span class="shours">${esc(shift.hours)}</span>`;
+        lbl.style.background = color.bg;
+        lbl.style.color      = color.acc;
         grid.appendChild(lbl);
 
         // Celdas de días
         DAYS.forEach(day => {
           const cell = el('div', 'dcell');
-          cell.style.background = bgMap[shift.id];
+          cell.style.background = color.bg;
           const name = data[day] && data[day][shift.id];
 
           if (name) {
@@ -994,6 +998,8 @@
 
     // ── Admin (Horarios editables) ───────────────────────────────
     let _adminClicks = 0, _adminTimeout;
+    let _tempShifts = [];
+
     function handleAdminClick() {
       _adminClicks++;
       clearTimeout(_adminTimeout);
@@ -1004,12 +1010,53 @@
       }
     }
 
+    function renderAdminList() {
+      const list = document.getElementById('admin-shifts-list');
+      list.innerHTML = '';
+      _tempShifts.forEach((s, i) => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '1rem';
+        div.style.padding = '10px';
+        div.style.background = 'var(--card)';
+        div.style.borderRadius = 'var(--rsm)';
+        div.style.position = 'relative';
+        
+        div.innerHTML = `
+          <button class="ic-btn del" style="position:absolute; top:10px; right:10px; background:var(--red); color:#fff; width:24px; height:24px; font-size:12px;" onclick="adminRemoveShift(${i})">✕</button>
+          <label style="font-size:.8rem; color:var(--cyan); display:block; margin-bottom:5px;">Nombre del Turno</label>
+          <input type="text" id="admin-label-${i}" value="${esc(s.label)}" placeholder="Ej. Matutino" style="margin-bottom:10px; font-size:.9rem;" />
+          <label style="font-size:.8rem; color:var(--cyan); display:block; margin-bottom:5px;">Horas</label>
+          <input type="text" id="admin-hours-${i}" value="${esc(s.hours)}" placeholder="Ej. 11:00 – 11:20" style="font-size:.9rem;" />
+        `;
+        list.appendChild(div);
+      });
+    }
+
     function openAdmin() {
-      document.getElementById('admin-noc').value = SHIFTS.find(s=>s.id==='noc').hours;
-      document.getElementById('admin-noc2').value = SHIFTS.find(s=>s.id==='noc2').hours;
-      document.getElementById('admin-mat').value = SHIFTS.find(s=>s.id==='mat').hours;
-      document.getElementById('admin-ves').value = SHIFTS.find(s=>s.id==='ves').hours;
+      _tempShifts = JSON.parse(JSON.stringify(SHIFTS)); // copia profunda
+      renderAdminList();
       document.getElementById('admin-overlay').classList.add('open');
+    }
+
+    function adminAddShift() {
+      // Leer valores actuales antes de re-renderizar para no perder lo que han escrito
+      _tempShifts.forEach((s, i) => {
+        const lblInput = document.getElementById('admin-label-'+i);
+        const hrsInput = document.getElementById('admin-hours-'+i);
+        if (lblInput) s.label = lblInput.value.trim();
+        if (hrsInput) s.hours = hrsInput.value.trim();
+      });
+      _tempShifts.push({ id: 's_' + Date.now(), label: 'Nuevo Turno', hours: '00:00 – 00:00' });
+      renderAdminList();
+      const list = document.getElementById('admin-shifts-list');
+      list.scrollTop = list.scrollHeight;
+    }
+
+    function adminRemoveShift(index) {
+      if (confirm('¿Seguro que quieres quitar este turno?')) {
+        _tempShifts.splice(index, 1);
+        renderAdminList();
+      }
     }
 
     function closeAdmin() {
@@ -1021,21 +1068,21 @@
     }
 
     function saveAdmin() {
-      const noc = document.getElementById('admin-noc').value.trim();
-      const noc2 = document.getElementById('admin-noc2').value.trim();
-      const mat = document.getElementById('admin-mat').value.trim();
-      const ves = document.getElementById('admin-ves').value.trim();
+      _tempShifts.forEach((s, i) => {
+        const lblInput = document.getElementById('admin-label-'+i);
+        const hrsInput = document.getElementById('admin-hours-'+i);
+        if (lblInput) s.label = lblInput.value.trim();
+        if (hrsInput) s.hours = hrsInput.value.trim();
+      });
+
       if (usesFB) {
-        db.ref('config/shifts').set({ noc, noc2, mat, ves })
-          .then(() => toast('✅ Horarios guardados para todos'))
+        db.ref('config/shiftsArr').set(_tempShifts)
+          .then(() => toast('✅ Turnos guardados para todos'))
           .catch(e => toast('⚠️ Error: ' + e.message));
       } else {
-        SHIFTS.find(s=>s.id==='noc').hours = noc;
-        SHIFTS.find(s=>s.id==='noc2').hours = noc2;
-        SHIFTS.find(s=>s.id==='mat').hours = mat;
-        SHIFTS.find(s=>s.id==='ves').hours = ves;
+        SHIFTS = _tempShifts;
         render();
-        toast('✅ Horarios actualizados (modo local)');
+        toast('✅ Turnos actualizados (modo local)');
       }
       closeAdmin();
     }
