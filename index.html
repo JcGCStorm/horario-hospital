@@ -428,6 +428,12 @@
     }
     footer a { color: var(--purple); text-decoration: none; }
 
+    .past-day {
+      opacity: 0.3 !important;
+      filter: grayscale(80%) brightness(0.8);
+      pointer-events: none; /* Opcional: para que se sienta más apagado, aunque dejemos que sigan editando si quieren forzándolo */
+    }
+
     /* ============================================================
        PRINT — estilos compartidos
        ============================================================ */
@@ -447,6 +453,12 @@
       .grid {
         min-width: 1050px !important; /* Forzar ancho para mantener layout tabular y forzar landscape en móviles */
         border-radius: 0 !important;
+      }
+
+      .past-day {
+        opacity: 1 !important;
+        filter: none !important;
+        pointer-events: auto !important;
       }
 
       @page { size: landscape; margin: 10mm; }
@@ -794,10 +806,17 @@
       const grid = document.getElementById('grid');
       grid.innerHTML = '';
 
+      // Obtener el día actual en México
+      const mxDateStr = new Date().toLocaleString("en-US", {timeZone: "America/Mexico_City"});
+      const mxDate = new Date(mxDateStr);
+      // mxDate.getDay(): 0 = Domingo, 1 = Lunes ... 6 = Sábado
+      const currentGridDay = mxDate.getDay() === 0 ? 6 : mxDate.getDay() - 1;
+
       // Cabecera de días
       const corner = el('div', 'corner'); grid.appendChild(corner);
       DAYS.forEach((day, i) => {
         const d = el('div', 'dh ' + (i >= 5 ? 'wknd' : 'wkd'));
+        if (i < currentGridDay) d.classList.add('past-day');
         d.textContent = day;
         grid.appendChild(d);
       });
@@ -813,9 +832,11 @@
         grid.appendChild(lbl);
 
         // Celdas de días
-        DAYS.forEach(day => {
+        DAYS.forEach((day, i) => {
           const cell = el('div', 'dcell');
           cell.style.background = color.bg;
+          if (i < currentGridDay) cell.classList.add('past-day');
+          
           const name = data[day] && data[day][shift.id];
 
           if (name) {
