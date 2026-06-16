@@ -535,7 +535,7 @@
        HEADER
        ============================================================ -->
   <header>
-    <div class="pill">⚕ Sistema de Relevos</div>
+    <div class="pill" onclick="handleAdminClick()" style="cursor:pointer; user-select:none;" title="Clic 5 veces para configurar horarios">⚕ Sistema de Relevos</div>
     <h1>Horario de Relevos — Hospital</h1>
     <p>Un nombre por turno por día · Los cambios se reflejan al instante para todos</p>
   </header>
@@ -573,6 +573,32 @@
     </div>
   </div>
 
+  <!-- Modal Admin -->
+  <div class="overlay" id="admin-overlay" onclick="adminOverlayClick(event)">
+    <div class="modal" style="width: min(420px, 92vw);">
+      <h2 style="color:var(--orange)">Configuración</h2>
+      <p class="mmeta">Edita las horas de los turnos</p>
+      
+      <div style="margin-bottom: 1rem;">
+        <label style="font-size: .8rem; color: var(--mat-acc);">Matutino</label>
+        <input id="admin-mat" type="text" placeholder="Ej. 06:00 – 12:00" onkeydown="if(event.key==='Enter')saveAdmin()" />
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label style="font-size: .8rem; color: var(--ves-acc);">Vespertino</label>
+        <input id="admin-ves" type="text" placeholder="Ej. 12:00 – 18:00" onkeydown="if(event.key==='Enter')saveAdmin()" />
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label style="font-size: .8rem; color: var(--noc-acc);">Nocturno</label>
+        <input id="admin-noc" type="text" placeholder="Ej. 18:00 – 06:00" onkeydown="if(event.key==='Enter')saveAdmin()" />
+      </div>
+
+      <div class="mactions">
+        <button class="btn-cancel" onclick="closeAdmin()">Cancelar</button>
+        <button class="btn-confirm" onclick="saveAdmin()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
@@ -605,10 +631,10 @@
 
     // ── Constantes ──────────────────────────────────────────────
     const DAYS   = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
-    const SHIFTS = [
+    let SHIFTS = [
       { id:'mat', label:'Matutino',   hours:'06:00 – 12:00' },
       { id:'ves', label:'Vespertino', hours:'12:00 – 18:00' },
-      { id:'noc', label:'Nocturno',   hours:'18:00 – 00:00' },
+      { id:'noc', label:'Nocturno',   hours:'18:00 – 06:00' },
     ];
     const RELEVO = {
       mat: { text:'★  RELEVO 12:00 — Matutino → Vespertino  ★',         cls:'rel-mat' },
@@ -657,6 +683,17 @@
       }, err => {
         console.error('Firebase listener error:', err);
         setConn('offline', 'Error de conexión');
+      });
+
+      // Escuchar configuración de horarios
+      db.ref('config/shifts').on('value', snap => {
+        if (snap.exists()) {
+          const conf = snap.val();
+          SHIFTS.forEach(s => {
+            if (conf[s.id]) s.hours = conf[s.id];
+          });
+          render();
+        }
       });
 
       // Presencia online/offline
@@ -885,8 +922,53 @@
 
     // ── Teclado ──────────────────────────────────────────────────
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') closeModal();
+      if (e.key === 'Escape') { closeModal(); closeAdmin(); }
     });
+
+    // ── Admin (Horarios editables) ───────────────────────────────
+    let _adminClicks = 0, _adminTimeout;
+    function handleAdminClick() {
+      _adminClicks++;
+      clearTimeout(_adminTimeout);
+      _adminTimeout = setTimeout(() => _adminClicks = 0, 1500);
+      if (_adminClicks >= 5) {
+        _adminClicks = 0;
+        openAdmin();
+      }
+    }
+
+    function openAdmin() {
+      document.getElementById('admin-mat').value = SHIFTS.find(s=>s.id==='mat').hours;
+      document.getElementById('admin-ves').value = SHIFTS.find(s=>s.id==='ves').hours;
+      document.getElementById('admin-noc').value = SHIFTS.find(s=>s.id==='noc').hours;
+      document.getElementById('admin-overlay').classList.add('open');
+    }
+
+    function closeAdmin() {
+      document.getElementById('admin-overlay').classList.remove('open');
+    }
+
+    function adminOverlayClick(e) {
+      if (e.target === document.getElementById('admin-overlay')) closeAdmin();
+    }
+
+    function saveAdmin() {
+      const mat = document.getElementById('admin-mat').value.trim();
+      const ves = document.getElementById('admin-ves').value.trim();
+      const noc = document.getElementById('admin-noc').value.trim();
+      if (usesFB) {
+        db.ref('config/shifts').set({ mat, ves, noc })
+          .then(() => toast('✅ Horarios guardados para todos'))
+          .catch(e => toast('⚠️ Error: ' + e.message));
+      } else {
+        SHIFTS.find(s=>s.id==='mat').hours = mat;
+        SHIFTS.find(s=>s.id==='ves').hours = ves;
+        SHIFTS.find(s=>s.id==='noc').hours = noc;
+        render();
+        toast('✅ Horarios actualizados (modo local)');
+      }
+      closeAdmin();
+    }
 
     // ── Init ─────────────────────────────────────────────────────
     usesFB = initFirebase();
