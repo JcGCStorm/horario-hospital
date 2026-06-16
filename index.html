@@ -858,7 +858,12 @@
 
     // ── Acciones globales ────────────────────────────────────────
     function clearAll() {
-      if (!confirm('¿Borrar todos los nombres del horario?')) return;
+      const resp = prompt('¿Estás seguro de que quieres borrar todo el horario?\n\nPara confirmar, escribe la palabra BORRAR en mayúsculas:');
+      if (resp !== 'BORRAR') {
+        if (resp !== null) toast('❌ Acción cancelada (la palabra no coincidió)');
+        return;
+      }
+      
       if (usesFB) {
         db.ref('horario').remove().catch(e => toast('⚠️ Error: ' + e.message));
       } else {
@@ -866,7 +871,7 @@
         lsSave();
         render();
       }
-      toast('🗑 Horario limpiado');
+      toast('🗑 Horario limpiado exitosamente');
     }
 
     function setPrintDate() {
