@@ -214,6 +214,7 @@
       display: grid;
       /* Forzar ancho mínimo por columna para que iOS Safari no recorte los últimos días */
       grid-template-columns: 110px repeat(7, minmax(130px, 1fr));
+      min-width: 1030px; /* NECESARIO para que grid-wrap lo pueda scrollear */
       border-radius: var(--radius);
       overflow: hidden;
       border: 1px solid rgba(98,114,164,.25);
