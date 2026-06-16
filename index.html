@@ -195,11 +195,25 @@
     /* ============================================================
        GRID
        ============================================================ */
-    .grid-wrap { padding: 0 1rem 2rem; overflow-x: auto; }
+    .mobile-hint {
+      display: none;
+      text-align: center;
+      font-size: .75rem;
+      color: var(--cyan);
+      padding: .5rem 0 1rem;
+      font-weight: 600;
+    }
+    @media (max-width: 800px) { .mobile-hint { display: block; } }
+
+    .grid-wrap {
+      padding: 0 1rem 2rem;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch; /* Scroll suave en iOS */
+    }
     .grid {
       display: grid;
       grid-template-columns: 120px repeat(7, 1fr);
-      min-width: 760px;
+      min-width: 800px;
       border-radius: var(--radius);
       overflow: hidden;
       border: 1px solid rgba(98,114,164,.25);
@@ -555,6 +569,7 @@
   </div>
 
   <!-- Grid -->
+  <div class="mobile-hint">👉 Desliza hacia la derecha para ver Sábado y Domingo</div>
   <div class="grid-wrap">
     <div class="grid" id="grid"></div>
   </div>
@@ -832,7 +847,8 @@
       const nameLower = name.toLowerCase();
       const bodrios = ['cmnhectorin', 'galamierdas', 'eduardus', 'qbi', 'martha', 'siri', 'sirimierdas'];
       if (bodrios.includes(nameLower)) {
-        alert('Puro Bodrio');
+        alert('💩 PURO BODRIO 💩');
+        toast('❌ Intento bloqueado por ser Puro Bodrio');
         return; // Evita que se guarde
       }
 
