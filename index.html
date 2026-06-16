@@ -657,12 +657,7 @@
       { id:'mat', label:'Matutino',   hours:'11:00 – 11:20' },
       { id:'ves', label:'Vespertino', hours:'18:00 – 18:20' },
     ];
-    const RELEVO = {
-      mat: { text:'★  RELEVO 12:00 — Matutino → Vespertino  ★',         cls:'rel-mat' },
-      ves: { text:'★  RELEVO 18:00 — Vespertino → Nocturno  ★',         cls:'rel-ves' },
-      noc: { text:'★  RELEVO 06:00 — Nocturno → Matutino (siguiente día)  ★', cls:'rel-noc' },
-    };
-
+    
     // ── Estado ──────────────────────────────────────────────────
     let isEditMode = false;
     // data[day][shiftId] = "Nombre" | null
@@ -848,11 +843,6 @@
 
           grid.appendChild(cell);
         });
-
-        // Banner relevo
-        const banner = el('div', `relevo ${RELEVO[shift.id].cls}`);
-        banner.textContent = RELEVO[shift.id].text;
-        grid.appendChild(banner);
       });
     }
 
