@@ -707,6 +707,20 @@
     }
 
     // ── Firebase ─────────────────────────────────────────────────
+    let _rawFBData = {};
+
+    function syncData() {
+      data = defaultData();
+      DAYS.forEach(day => {
+        SHIFTS.forEach(s => {
+          if (_rawFBData[day] && typeof _rawFBData[day][s.id] === 'string') {
+            data[day][s.id] = _rawFBData[day][s.id] || null;
+          }
+        });
+      });
+      render();
+    }
+
     function initFirebase() {
       const cfg = FIREBASE_CONFIG;
       if (!cfg.apiKey || !cfg.databaseURL) return false;
@@ -719,16 +733,8 @@
 
     function listenFirebase() {
       db.ref('horario').on('value', snap => {
-        const val = snap.val() || {};
-        data = defaultData();
-        DAYS.forEach(day => {
-          SHIFTS.forEach(s => {
-            if (val[day] && typeof val[day][s.id] === 'string') {
-              data[day][s.id] = val[day][s.id] || null;
-            }
-          });
-        });
-        render();
+        _rawFBData = snap.val() || {};
+        syncData();
       }, err => {
         console.error('Firebase listener error:', err);
         setConn('offline', 'Error de conexión');
@@ -738,14 +744,14 @@
       db.ref('config/shiftsArr').on('value', snap => {
         if (snap.exists()) {
           SHIFTS = snap.val();
-          render();
+          syncData();
         } else {
           // Fallback a configuración antigua
           db.ref('config/shifts').once('value').then(oldSnap => {
             if (oldSnap.exists()) {
               const conf = oldSnap.val();
               SHIFTS.forEach(s => { if (conf[s.id]) s.hours = conf[s.id]; });
-              render();
+              syncData();
             }
           });
         }
