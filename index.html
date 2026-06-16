@@ -830,7 +830,8 @@
       
       // Easter egg
       const nameLower = name.toLowerCase();
-      if (nameLower === 'cmnhectorin' || nameLower === 'galamierdas') {
+      const bodrios = ['cmnhectorin', 'galamierdas', 'eduardus', 'qbi', 'martha'];
+      if (bodrios.includes(nameLower)) {
         alert('Puro Bodrio');
         return; // Evita que se guarde
       }
