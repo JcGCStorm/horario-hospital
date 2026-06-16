@@ -4,45 +4,47 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Horario de Relevos — Hospital</title>
-  <meta name="description" content="Sistema de relevos hospitalarios. Agrega tu nombre al turno que te corresponde y genera el horario imprimible." />
+  <meta name="description" content="Sistema de relevos hospitalarios en tiempo real." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Firebase SDKs (compat — sin módulos, funciona en cualquier navegador) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
   <style>
     /* ============================================================
-       VARIABLES — Paleta Dracula
+       VARIABLES
        ============================================================ */
     :root {
-      --bg:       #282A36;
-      --surface:  #1E2030;
-      --card:     #44475A;
-      --border:   #6272A4;
-      --fg:       #F8F8F2;
-      --comment:  #6272A4;
-      --cyan:     #8BE9FD;
-      --green:    #50FA7B;
-      --orange:   #FFB86C;
-      --pink:     #FF79C6;
-      --purple:   #BD93F9;
-      --red:      #FF5555;
-      --yellow:   #F1FA8C;
+      --bg:      #282A36;
+      --surface: #1E2030;
+      --card:    #44475A;
+      --border:  #6272A4;
+      --fg:      #F8F8F2;
+      --comment: #6272A4;
+      --cyan:    #8BE9FD;
+      --green:   #50FA7B;
+      --orange:  #FFB86C;
+      --pink:    #FF79C6;
+      --purple:  #BD93F9;
+      --red:     #FF5555;
+      --yellow:  #F1FA8C;
 
-      --mat-bg:   #1B3048;
-      --mat-acc:  #8BE9FD;
-      --ves-bg:   #2E1A30;
-      --ves-acc:  #FF79C6;
-      --noc-bg:   #162416;
-      --noc-acc:  #50FA7B;
+      --mat-bg:  #1B3048;
+      --mat-acc: #8BE9FD;
+      --ves-bg:  #2E1A30;
+      --ves-acc: #FF79C6;
+      --noc-bg:  #162416;
+      --noc-acc: #50FA7B;
 
-      --radius:   12px;
-      --radius-sm: 6px;
-      --shadow:   0 4px 24px rgba(0,0,0,.5);
-      --transition: .18s cubic-bezier(.4,0,.2,1);
+      --radius:  12px;
+      --rsm:     7px;
+      --shadow:  0 4px 24px rgba(0,0,0,.5);
+      --tr:      .17s cubic-bezier(.4,0,.2,1);
     }
 
-    /* ============================================================
-       RESET & BASE
-       ============================================================ */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
     body {
@@ -50,310 +52,311 @@
       background: var(--bg);
       color: var(--fg);
       min-height: 100vh;
-      line-height: 1.5;
     }
     button { cursor: pointer; font-family: inherit; border: none; }
+
+    /* ============================================================
+       SETUP BANNER — visible solo si Firebase no está configurado
+       ============================================================ */
+    #setup-banner {
+      background: linear-gradient(135deg, rgba(255,182,108,.12), rgba(189,147,249,.12));
+      border: 1px solid rgba(255,182,108,.35);
+      border-radius: var(--radius);
+      margin: 1rem;
+      padding: 1.25rem 1.5rem;
+      display: none; /* JS lo muestra si es necesario */
+    }
+    #setup-banner h3 {
+      color: var(--orange);
+      font-size: 1rem;
+      margin-bottom: .5rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    #setup-banner p { font-size: .85rem; color: var(--comment); line-height: 1.6; }
+    #setup-banner ol { margin: .75rem 0 0 1.2rem; font-size: .83rem; color: var(--fg); line-height: 1.9; }
+    #setup-banner code {
+      background: rgba(255,255,255,.08);
+      border-radius: 4px;
+      padding: .1em .4em;
+      font-size: .8em;
+      color: var(--cyan);
+    }
+    #setup-banner a { color: var(--purple); }
+    .banner-note {
+      margin-top: .75rem;
+      padding: .6rem .9rem;
+      background: rgba(80,250,123,.08);
+      border-radius: var(--rsm);
+      border: 1px solid rgba(80,250,123,.2);
+      font-size: .8rem;
+      color: var(--green);
+    }
+
+    /* ============================================================
+       ESTADO DE CONEXIÓN
+       ============================================================ */
+    #conn-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .4rem;
+      font-size: .75rem;
+      color: var(--comment);
+      padding: .4rem 0 0;
+    }
+    .conn-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--comment);
+      transition: background .4s;
+    }
+    .conn-dot.online  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .conn-dot.offline { background: var(--red); }
+    .conn-dot.local   { background: var(--orange); }
 
     /* ============================================================
        HEADER
        ============================================================ */
     header {
       text-align: center;
-      padding: 2.5rem 1rem 1.5rem;
-      border-bottom: 1px solid rgba(98,114,164,.3);
-      position: relative;
+      padding: 2rem 1rem 1rem;
+      border-bottom: 1px solid rgba(98,114,164,.25);
     }
-    .header-pill {
+    .pill {
       display: inline-block;
       background: rgba(189,147,249,.15);
       border: 1px solid rgba(189,147,249,.4);
       border-radius: 999px;
-      padding: .25rem .9rem;
-      font-size: .75rem;
+      padding: .2rem .85rem;
+      font-size: .72rem;
       font-weight: 600;
       letter-spacing: .08em;
       color: var(--purple);
       text-transform: uppercase;
-      margin-bottom: .9rem;
+      margin-bottom: .8rem;
     }
     header h1 {
-      font-size: clamp(1.6rem, 4vw, 2.8rem);
+      font-size: clamp(1.5rem, 4vw, 2.5rem);
       font-weight: 800;
-      background: linear-gradient(135deg, var(--pink) 0%, var(--purple) 50%, var(--cyan) 100%);
+      background: linear-gradient(135deg, var(--pink), var(--purple) 50%, var(--cyan));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      margin-bottom: .4rem;
+      margin-bottom: .3rem;
     }
-    header p {
-      color: var(--comment);
-      font-size: .95rem;
-      max-width: 520px;
-      margin: 0 auto;
-    }
+    header p { color: var(--comment); font-size: .9rem; }
 
     /* ============================================================
-       TOP ACTIONS
+       ACCIONES
        ============================================================ */
-    .top-actions {
+    .actions {
       display: flex;
       justify-content: center;
-      gap: .75rem;
-      padding: 1.25rem 1rem;
+      gap: .65rem;
+      padding: 1rem 1rem .5rem;
       flex-wrap: wrap;
     }
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: .5rem;
-      padding: .6rem 1.25rem;
-      border-radius: var(--radius-sm);
-      font-size: .875rem;
+      gap: .4rem;
+      padding: .55rem 1.1rem;
+      border-radius: var(--rsm);
+      font-size: .84rem;
       font-weight: 600;
-      transition: var(--transition);
+      transition: var(--tr);
       letter-spacing: .02em;
     }
-    .btn:active { transform: scale(.97); }
-    .btn-primary {
-      background: var(--purple);
-      color: #1a1a2e;
-    }
-    .btn-primary:hover { background: #c9a0fb; box-shadow: 0 0 20px rgba(189,147,249,.4); }
-    .btn-success {
-      background: var(--green);
-      color: #0d1a0d;
-    }
-    .btn-success:hover { background: #6afb91; box-shadow: 0 0 20px rgba(80,250,123,.4); }
-    .btn-outline {
-      background: transparent;
-      color: var(--cyan);
-      border: 1px solid rgba(139,233,253,.35);
-    }
-    .btn-outline:hover {
-      background: rgba(139,233,253,.1);
-      border-color: var(--cyan);
-    }
-    .btn-danger-outline {
-      background: transparent;
-      color: var(--red);
-      border: 1px solid rgba(255,85,85,.35);
-      font-size: .8rem;
-      padding: .4rem .8rem;
-    }
-    .btn-danger-outline:hover { background: rgba(255,85,85,.1); }
+    .btn:active { transform: scale(.96); }
+    .btn-print-light { background: var(--green);  color: #0d1a0d; }
+    .btn-print-light:hover { filter: brightness(1.15); box-shadow: 0 0 18px rgba(80,250,123,.4); }
+    .btn-print-dark  { background: var(--card);  color: var(--fg);
+                        border: 1px solid rgba(189,147,249,.5); }
+    .btn-print-dark:hover { background: rgba(189,147,249,.15); border-color: var(--purple);
+                             box-shadow: 0 0 16px rgba(189,147,249,.3); }
+    .btn-clear  { background: transparent; color: var(--red); border: 1px solid rgba(255,85,85,.3); font-size: .8rem; }
+    .btn-clear:hover { background: rgba(255,85,85,.1); }
 
     /* ============================================================
-       LEYENDA DE TURNOS
+       LEYENDA
        ============================================================ */
     .legend {
       display: flex;
       justify-content: center;
-      gap: 1rem;
-      padding: 0 1rem .75rem;
+      gap: 1.2rem;
+      padding: .5rem 1rem .75rem;
       flex-wrap: wrap;
     }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: .45rem;
-      font-size: .8rem;
-      font-weight: 600;
-    }
-    .legend-dot {
-      width: 10px; height: 10px;
-      border-radius: 50%;
-    }
+    .leg { display: flex; align-items: center; gap: .4rem; font-size: .78rem; font-weight: 600; }
+    .leg-dot { width: 9px; height: 9px; border-radius: 50%; }
 
     /* ============================================================
-       SCHEDULE GRID
+       GRID
        ============================================================ */
-    .schedule-wrapper {
-      padding: 0 1rem 2rem;
-      overflow-x: auto;
-    }
-    .schedule-grid {
+    .grid-wrap { padding: 0 1rem 2rem; overflow-x: auto; }
+    .grid {
       display: grid;
-      grid-template-columns: 130px repeat(7, 1fr);
-      min-width: 780px;
+      grid-template-columns: 120px repeat(7, 1fr);
+      min-width: 760px;
       border-radius: var(--radius);
       overflow: hidden;
-      border: 1px solid rgba(98,114,164,.3);
+      border: 1px solid rgba(98,114,164,.25);
       box-shadow: var(--shadow);
     }
 
-    /* --- Day header row --- */
-    .day-header {
-      display: contents;
-    }
-    .corner-cell, .day-cell-header {
+    /* Day headers */
+    .corner, .dh {
       background: var(--card);
-      padding: .75rem .5rem;
+      padding: .65rem .4rem;
       text-align: center;
-      font-weight: 700;
-      font-size: .85rem;
-      border-bottom: 2px solid rgba(98,114,164,.4);
-    }
-    .corner-cell { background: var(--surface); }
-    .day-cell-header.weekend { color: var(--orange); }
-    .day-cell-header.weekday { color: var(--yellow); }
-
-    /* --- Shift row --- */
-    .shift-label {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 1rem .5rem;
       font-weight: 700;
       font-size: .82rem;
-      letter-spacing: .04em;
-      text-transform: uppercase;
-      border-right: 2px solid rgba(98,114,164,.25);
-      position: sticky;
-      left: 0;
-      z-index: 1;
+      border-bottom: 2px solid rgba(98,114,164,.35);
     }
-    .shift-label .shift-name { font-size: .9rem; margin-bottom: .2rem; }
-    .shift-label .shift-hours {
-      font-size: .68rem;
-      font-weight: 400;
-      opacity: .7;
-      letter-spacing: .02em;
-    }
-    .mat .shift-label { background: var(--mat-bg); color: var(--mat-acc); }
-    .ves .shift-label { background: var(--ves-bg); color: var(--ves-acc); }
-    .noc .shift-label { background: var(--noc-bg); color: var(--noc-acc); }
+    .corner { background: var(--surface); }
+    .dh.wkd { color: var(--yellow); }
+    .dh.wknd { color: var(--orange); }
 
-    /* --- Day cells --- */
-    .day-cell {
-      padding: .6rem .5rem;
-      min-height: 110px;
-      border-left: 1px solid rgba(98,114,164,.15);
+    /* Shift label */
+    .slabel {
       display: flex;
       flex-direction: column;
-      gap: .35rem;
-      transition: var(--transition);
-    }
-    .mat .day-cell { background: var(--mat-bg); }
-    .ves .day-cell { background: var(--ves-bg); }
-    .noc .day-cell { background: var(--noc-bg); }
-    .day-cell:hover { filter: brightness(1.08); }
-
-    /* --- Name tag --- */
-    .name-tag {
-      display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: .3rem;
-      background: rgba(255,255,255,.09);
-      border-radius: var(--radius-sm);
-      padding: .25rem .5rem .25rem .6rem;
-      font-size: .8rem;
-      font-weight: 500;
-      animation: fadeIn .2s ease;
+      justify-content: center;
+      padding: .75rem .4rem;
+      font-weight: 700;
+      font-size: .78rem;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      border-right: 2px solid rgba(98,114,164,.2);
     }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-4px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .name-tag .name-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .name-tag .remove-btn {
-      background: none;
-      border: none;
-      color: var(--red);
-      opacity: .5;
-      font-size: .9rem;
-      line-height: 1;
-      padding: 0 2px;
-      flex-shrink: 0;
-      transition: opacity .15s;
-    }
-    .name-tag .remove-btn:hover { opacity: 1; }
+    .slabel .sname  { font-size: .85rem; margin-bottom: .15rem; }
+    .slabel .shours { font-size: .65rem; opacity: .65; font-weight: 400; }
+    .mat .slabel { background: var(--mat-bg); color: var(--mat-acc); }
+    .ves .slabel { background: var(--ves-bg); color: var(--ves-acc); }
+    .noc .slabel { background: var(--noc-bg); color: var(--noc-acc); }
 
-    /* --- Add button --- */
+    /* Day cell */
+    .dcell {
+      padding: .55rem .45rem;
+      min-height: 90px;
+      border-left: 1px solid rgba(98,114,164,.12);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: stretch;
+      transition: var(--tr);
+    }
+    .mat .dcell { background: var(--mat-bg); }
+    .ves .dcell { background: var(--ves-bg); }
+    .noc .dcell { background: var(--noc-bg); }
+    .dcell:hover { filter: brightness(1.07); }
+
+    /* —— VACÍO —— */
     .add-btn {
-      margin-top: auto;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: .3rem;
-      background: rgba(255,255,255,.05);
-      border: 1px dashed rgba(255,255,255,.2);
-      border-radius: var(--radius-sm);
-      color: rgba(255,255,255,.45);
+      background: rgba(255,255,255,.04);
+      border: 1.5px dashed rgba(255,255,255,.18);
+      border-radius: var(--rsm);
+      color: rgba(255,255,255,.4);
       font-size: .75rem;
-      padding: .3rem;
-      transition: var(--transition);
+      padding: .6rem .4rem;
       width: 100%;
+      transition: var(--tr);
     }
     .add-btn:hover {
-      background: rgba(255,255,255,.1);
-      color: rgba(255,255,255,.8);
-      border-color: rgba(255,255,255,.4);
+      background: rgba(255,255,255,.09);
+      color: rgba(255,255,255,.75);
+      border-color: rgba(255,255,255,.38);
     }
 
-    /* --- Relevo banner --- */
-    .relevo-banner {
+    /* —— OCUPADO —— */
+    .name-card {
+      background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: var(--rsm);
+      padding: .45rem .55rem;
+      display: flex;
+      align-items: center;
+      gap: .35rem;
+      animation: pop .22s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes pop {
+      from { opacity: 0; transform: scale(.88); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .name-text {
+      flex: 1;
+      font-size: .82rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ic-btn {
+      background: none;
+      border: none;
+      padding: 2px 4px;
+      font-size: .8rem;
+      opacity: .45;
+      transition: opacity .15s;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .ic-btn:hover { opacity: 1; }
+    .ic-btn.edit { color: var(--cyan); }
+    .ic-btn.del  { color: var(--red); }
+
+    /* Relevo banners */
+    .relevo {
       grid-column: 1 / -1;
       text-align: center;
-      padding: .4rem;
-      font-size: .75rem;
+      padding: .35rem;
+      font-size: .72rem;
       font-weight: 600;
-      letter-spacing: .05em;
+      letter-spacing: .06em;
     }
-    .relevo-mat { background: rgba(189,147,249,.18); color: var(--purple); border-top: 1px solid rgba(189,147,249,.3); }
-    .relevo-ves { background: rgba(255,182,108,.15); color: var(--orange); border-top: 1px solid rgba(255,182,108,.25); }
-    .relevo-noc { background: rgba(139,233,253,.12); color: var(--cyan); border-top: 1px solid rgba(139,233,253,.2); }
+    .rel-mat { background: rgba(189,147,249,.16); color: var(--purple); border-top: 1px solid rgba(189,147,249,.25); }
+    .rel-ves { background: rgba(255,182,108,.13); color: var(--orange); border-top: 1px solid rgba(255,182,108,.22); }
+    .rel-noc { background: rgba(139,233,253,.1);  color: var(--cyan);   border-top: 1px solid rgba(139,233,253,.18); }
 
     /* ============================================================
        MODAL
        ============================================================ */
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.65);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.6);
+      display: flex; align-items: center; justify-content: center;
       z-index: 100;
-      opacity: 0;
-      pointer-events: none;
+      opacity: 0; pointer-events: none;
       transition: opacity .2s;
-      backdrop-filter: blur(4px);
+      backdrop-filter: blur(5px);
     }
-    .modal-overlay.open {
-      opacity: 1;
-      pointer-events: all;
-    }
+    .overlay.open { opacity: 1; pointer-events: all; }
     .modal {
       background: var(--surface);
       border: 1px solid rgba(98,114,164,.4);
       border-radius: var(--radius);
-      padding: 1.75rem;
-      width: min(380px, 92vw);
-      box-shadow: 0 20px 60px rgba(0,0,0,.6);
-      transform: translateY(12px) scale(.97);
-      transition: transform .22s cubic-bezier(.4,0,.2,1);
+      padding: 1.6rem;
+      width: min(360px, 92vw);
+      box-shadow: 0 20px 60px rgba(0,0,0,.65);
+      transform: translateY(10px) scale(.97);
+      transition: transform .2s cubic-bezier(.4,0,.2,1);
     }
-    .modal-overlay.open .modal {
-      transform: translateY(0) scale(1);
-    }
-    .modal h2 {
-      font-size: 1.05rem;
-      font-weight: 700;
-      margin-bottom: .25rem;
-    }
-    .modal .modal-meta {
-      font-size: .78rem;
-      color: var(--comment);
-      margin-bottom: 1.1rem;
-    }
+    .overlay.open .modal { transform: none; }
+    .modal h2 { font-size: 1rem; font-weight: 700; margin-bottom: .2rem; }
+    .modal .mmeta { font-size: .78rem; color: var(--comment); margin-bottom: 1rem; }
     .modal input {
       width: 100%;
       background: var(--card);
       border: 1px solid rgba(98,114,164,.4);
-      border-radius: var(--radius-sm);
-      padding: .65rem .85rem;
+      border-radius: var(--rsm);
+      padding: .6rem .8rem;
       color: var(--fg);
       font-family: inherit;
       font-size: .9rem;
@@ -361,175 +364,211 @@
       transition: border-color .15s;
       margin-bottom: .75rem;
     }
-    .modal input:focus { border-color: var(--purple); }
+    .modal input:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(189,147,249,.15); }
     .modal input::placeholder { color: var(--comment); }
-    .modal-actions { display: flex; gap: .6rem; justify-content: flex-end; }
+    .mactions { display: flex; gap: .5rem; justify-content: flex-end; }
     .btn-cancel {
-      background: transparent;
-      color: var(--comment);
+      background: transparent; color: var(--comment);
       border: 1px solid rgba(98,114,164,.3);
-      border-radius: var(--radius-sm);
-      padding: .55rem 1rem;
-      font-size: .85rem;
-      font-weight: 600;
-      transition: var(--transition);
+      border-radius: var(--rsm); padding: .5rem .9rem;
+      font-size: .83rem; font-weight: 600; transition: var(--tr);
     }
     .btn-cancel:hover { background: rgba(98,114,164,.15); color: var(--fg); }
+    .btn-confirm {
+      background: var(--purple); color: #1a1a2e;
+      border-radius: var(--rsm); padding: .5rem 1rem;
+      font-size: .83rem; font-weight: 700; transition: var(--tr);
+    }
+    .btn-confirm:hover { filter: brightness(1.12); }
 
     /* ============================================================
        TOAST
        ============================================================ */
     .toast {
-      position: fixed;
-      bottom: 1.5rem;
-      left: 50%;
+      position: fixed; bottom: 1.5rem; left: 50%;
       transform: translateX(-50%) translateY(80px);
       background: var(--card);
       border: 1px solid rgba(98,114,164,.4);
-      border-radius: var(--radius-sm);
-      padding: .65rem 1.25rem;
-      font-size: .85rem;
-      font-weight: 500;
+      border-radius: var(--rsm);
+      padding: .6rem 1.2rem;
+      font-size: .83rem; font-weight: 500;
       box-shadow: var(--shadow);
-      transition: transform .3s cubic-bezier(.4,0,.2,1);
-      z-index: 200;
-      white-space: nowrap;
+      transition: transform .28s cubic-bezier(.4,0,.2,1);
+      z-index: 200; white-space: nowrap;
     }
     .toast.show { transform: translateX(-50%) translateY(0); }
 
     /* ============================================================
-       PRINT STYLES
-       ============================================================ */
-    @media print {
-      body { background: white !important; color: black !important; }
-      header, .top-actions, .legend, .modal-overlay, .toast,
-      .add-btn, .remove-btn, .btn { display: none !important; }
-      .schedule-wrapper { padding: 0; overflow: visible; }
-      .print-header { display: block !important; }
-      .schedule-grid {
-        min-width: unset !important;
-        width: 100% !important;
-        border: 1px solid #ccc !important;
-        border-radius: 0 !important;
-      }
-      .corner-cell, .day-cell-header { background: #f0f0f0 !important; color: black !important; }
-      .shift-label { background: #f5f5f5 !important; color: black !important; border-right: 1px solid #ccc !important; }
-      .day-cell { background: white !important; min-height: 80px !important; border-left: 1px solid #eee !important; }
-      .name-tag { background: #f0f0f0 !important; color: black !important; }
-      .relevo-banner { background: #e8e8e8 !important; color: #444 !important; border: none !important; border-top: 1px solid #ccc !important; }
-      @page { size: A3 landscape; margin: 15mm; }
-    }
-
-    /* Print header (hidden on screen) */
-    .print-header {
-      display: none;
-      text-align: center;
-      margin-bottom: 1rem;
-    }
-    .print-header h1 { font-size: 1.4rem; color: black; }
-    .print-header p { font-size: .8rem; color: #666; }
-
-    /* ============================================================
        FOOTER
        ============================================================ */
-    .site-footer {
+    footer {
       text-align: center;
-      padding: 1.5rem;
+      padding: 1.25rem;
       color: var(--comment);
-      font-size: .78rem;
-      border-top: 1px solid rgba(98,114,164,.2);
+      font-size: .77rem;
+      border-top: 1px solid rgba(98,114,164,.18);
     }
-    .site-footer a { color: var(--purple); text-decoration: none; }
-    .site-footer a:hover { text-decoration: underline; }
+    footer a { color: var(--purple); text-decoration: none; }
 
     /* ============================================================
-       RESPONSIVE
+       PRINT — estilos compartidos
        ============================================================ */
-    @media (max-width: 600px) {
-      .top-actions { gap: .5rem; }
-      .btn { padding: .55rem 1rem; font-size: .8rem; }
+    .print-title { display: none; }
+
+    @media print {
+      /* Ocultar UI */
+      #setup-banner, #conn-status, .actions, .legend,
+      .overlay, .toast, .add-btn, .ic-btn, footer { display: none !important; }
+
+      .print-title {
+        display: block !important;
+        text-align: center;
+        margin-bottom: .75rem;
+      }
+
+      .grid {
+        min-width: unset !important;
+        border-radius: 0 !important;
+      }
+
+      @page { size: A3 landscape; margin: 12mm; }
+    }
+
+    /* —— MODO CLARO (fondo blanco) —— */
+    @media print {
+      body:not(.print-dark) {
+        background: white !important;
+        color: black !important;
+      }
+      body:not(.print-dark) .print-title h1 { font-size: 1.3rem; color: black; }
+      body:not(.print-dark) .print-title p  { font-size: .75rem; color: #666; }
+      body:not(.print-dark) .grid { border: 1px solid #bbb !important; }
+      body:not(.print-dark) .corner,
+      body:not(.print-dark) .dh    { background: #eee !important; color: black !important; }
+      body:not(.print-dark) .dh.wkd  { color: #7a6500 !important; }
+      body:not(.print-dark) .dh.wknd { color: #a04800 !important; }
+      body:not(.print-dark) .slabel  { background: #f0f0f0 !important; color: #333 !important;
+                                        border-right: 1px solid #ccc !important; }
+      body:not(.print-dark) .dcell   { background: white !important; min-height: 70px !important;
+                                        border-left: 1px solid #eee !important; }
+      body:not(.print-dark) .name-card { background: #e8e8e8 !important;
+                                          border: 1px solid #ccc !important; }
+      body:not(.print-dark) .name-text { color: black !important; }
+      body:not(.print-dark) .relevo   { background: #e2e2e2 !important; color: #444 !important;
+                                         border-top: 1px solid #ccc !important; }
+    }
+
+    /* —— MODO OSCURO (fondo negro / Dracula) —— */
+    @media print {
+      /* Forzar colores — sin esto el navegador los elimina */
+      html.print-dark, html.print-dark *,
+      body.print-dark, body.print-dark * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      html.print-dark,
+      body.print-dark {
+        background: #282A36 !important;
+        color: #F8F8F2 !important;
+        /* Truco para forzar el fondo negro incluso si "Gráficos de fondo" está desactivado */
+        box-shadow: inset 0 0 0 100000px #282A36 !important;
+      }
+      body.print-dark .print-title h1 {
+        font-size: 1.3rem;
+        background: linear-gradient(135deg, #FF79C6, #BD93F9 50%, #8BE9FD);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      body.print-dark .print-title p { font-size: .75rem; color: #6272A4; }
+      body.print-dark .grid  { border: 1px solid #44475A !important; }
+      body.print-dark .corner { background: #1E2030 !important; }
+      body.print-dark .dh     { background: #44475A !important; }
+      body.print-dark .dh.wkd  { color: #F1FA8C !important; }
+      body.print-dark .dh.wknd { color: #FFB86C !important; }
+      /* Celdas de turno: los colores inline del JS quedan preservados por print-color-adjust */
+      body.print-dark .slabel  { border-right: 1px solid rgba(98,114,164,.4) !important; }
+      body.print-dark .dcell   { min-height: 70px !important;
+                                   border-left: 1px solid rgba(98,114,164,.15) !important; }
+      body.print-dark .name-card { background: rgba(255,255,255,.12) !important;
+                                     border: 1px solid rgba(255,255,255,.18) !important; }
+      body.print-dark .name-text { color: #F8F8F2 !important; }
+      body.print-dark .relevo    { border-top: 1px solid rgba(98,114,164,.3) !important; }
+      body.print-dark .rel-mat   { background: rgba(189,147,249,.2) !important; color: #BD93F9 !important; }
+      body.print-dark .rel-ves   { background: rgba(255,182,108,.15) !important; color: #FFB86C !important; }
+      body.print-dark .rel-noc   { background: rgba(139,233,253,.12) !important; color: #8BE9FD !important; }
     }
   </style>
 </head>
 <body>
 
-  <!-- ============================================================
-       PRINT HEADER (solo visible al imprimir)
-       ============================================================ -->
-  <div class="print-header">
+  <!-- Print only header -->
+  <div class="print-title">
     <h1>HORARIO DE RELEVOS — HOSPITAL</h1>
-    <p id="print-date">Semana de trabajo · Generado el <span id="print-date-val"></span></p>
+    <p id="print-date"></p>
+  </div>
+
+  <!-- ============================================================
+       BANNER DE CONFIGURACIÓN FIREBASE
+       ============================================================ -->
+  <div id="setup-banner">
+    <h3>⚡ Activa la sincronización en tiempo real</h3>
+    <p>Ahora mismo el horario se guarda <strong>solo en este navegador</strong>. Para que todos vean los cambios al instante, conecta Firebase Realtime Database (gratis):</p>
+    <ol>
+      <li>Ve a <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> e inicia sesión con tu cuenta Google.</li>
+      <li>Crea un proyecto nuevo → nombre cualquiera (ej. <code>horario-hospital</code>).</li>
+      <li>Ve a <strong>Realtime Database</strong> → <em>Crear base de datos</em> → modo <strong>prueba</strong> (reglas abiertas).</li>
+      <li>Ve a <strong>Configuración del proyecto</strong> → <em>Tus apps</em> → ícono web <code>&lt;/&gt;</code> → registra la app.</li>
+      <li>Copia los valores del objeto <code>firebaseConfig</code> en la sección <code>FIREBASE_CONFIG</code> de este archivo <code>index.html</code>.</li>
+    </ol>
+    <div class="banner-note">✅ Mientras tanto, la app funciona normalmente — los datos se guardan en este navegador.</div>
+  </div>
+
+  <!-- Estado de conexión -->
+  <div id="conn-status">
+    <span class="conn-dot" id="conn-dot"></span>
+    <span id="conn-label">Cargando...</span>
   </div>
 
   <!-- ============================================================
        HEADER
        ============================================================ -->
   <header>
-    <div class="header-pill">⚕ Sistema de Relevos</div>
+    <div class="pill">⚕ Sistema de Relevos</div>
     <h1>Horario de Relevos — Hospital</h1>
-    <p>Agrega tu nombre al turno que te corresponde. Cuando estén todos, genera el horario imprimible.</p>
+    <p>Un nombre por turno por día · Los cambios se reflejan al instante para todos</p>
   </header>
 
-  <!-- ============================================================
-       ACCIONES SUPERIORES
-       ============================================================ -->
-  <div class="top-actions">
-    <button class="btn btn-success" onclick="printSchedule()" id="btn-print">
-      🖨️ Imprimir Horario
-    </button>
-    <button class="btn btn-outline" onclick="shareSchedule()" id="btn-share">
-      🔗 Compartir Link
-    </button>
-    <button class="btn btn-danger-outline" onclick="clearAll()" id="btn-clear">
-      🗑 Limpiar Todo
-    </button>
+  <!-- Acciones -->
+  <div class="actions">
+    <button class="btn btn-print-light" onclick="printLight()">🖨️ Imprimir (Blanco)</button>
+    <button class="btn btn-print-dark"  onclick="printDark()">🌙 Imprimir (Negro)</button>
+    <button class="btn btn-clear" onclick="clearAll()">🗑 Limpiar Todo</button>
   </div>
 
-  <!-- ============================================================
-       LEYENDA
-       ============================================================ -->
+  <!-- Leyenda -->
   <div class="legend">
-    <span class="legend-item">
-      <span class="legend-dot" style="background:var(--mat-acc)"></span>
-      Matutino 06:00–12:00
-    </span>
-    <span class="legend-item">
-      <span class="legend-dot" style="background:var(--ves-acc)"></span>
-      Vespertino 12:00–18:00
-    </span>
-    <span class="legend-item">
-      <span class="legend-dot" style="background:var(--noc-acc)"></span>
-      Nocturno 18:00–00:00
-    </span>
+    <span class="leg"><span class="leg-dot" style="background:var(--mat-acc)"></span>Matutino 06:00–12:00</span>
+    <span class="leg"><span class="leg-dot" style="background:var(--ves-acc)"></span>Vespertino 12:00–18:00</span>
+    <span class="leg"><span class="leg-dot" style="background:var(--noc-acc)"></span>Nocturno 18:00–00:00</span>
   </div>
 
-  <!-- ============================================================
-       GRID DEL HORARIO
-       ============================================================ -->
-  <div class="schedule-wrapper">
-    <div class="schedule-grid" id="schedule-grid">
-      <!-- Generado por JS -->
-    </div>
+  <!-- Grid -->
+  <div class="grid-wrap">
+    <div class="grid" id="grid"></div>
   </div>
 
-  <!-- ============================================================
-       MODAL — agregar nombre
-       ============================================================ -->
-  <div class="modal-overlay" id="modal-overlay" onclick="closeModalOnOverlay(event)">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <h2 id="modal-title">Agregar nombre</h2>
-      <p class="modal-meta" id="modal-meta"></p>
-      <input
-        type="text"
-        id="modal-input"
-        placeholder="Tu nombre completo"
-        maxlength="40"
-        autocomplete="off"
-        onkeydown="if(event.key==='Enter') confirmAdd()"
-      />
-      <div class="modal-actions">
+  <!-- Modal -->
+  <div class="overlay" id="overlay" onclick="overlayClick(event)">
+    <div class="modal">
+      <h2 id="m-title">Agregar nombre</h2>
+      <p class="mmeta" id="m-meta"></p>
+      <input id="m-input" type="text" placeholder="Nombre completo" maxlength="40"
+             autocomplete="off" onkeydown="if(event.key==='Enter')confirmModal()" />
+      <div class="mactions">
         <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="confirmAdd()">➕ Agregar</button>
+        <button class="btn-confirm" onclick="confirmModal()">Guardar</button>
       </div>
     </div>
   </div>
@@ -537,253 +576,332 @@
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
-  <!-- ============================================================
-       PIE DE PÁGINA
-       ============================================================ -->
-  <footer class="site-footer">
-    Hospedado en <a href="https://pages.github.com" target="_blank">GitHub Pages</a> · Abre en cualquier navegador · Sin servidores, sin cuentas
+  <!-- Footer -->
+  <footer>
+    Hospedado en <a href="https://pages.github.com" target="_blank">GitHub Pages</a>
+    · Sincronización vía <a href="https://firebase.google.com" target="_blank">Firebase</a>
+    · Sin cuentas de usuario
   </footer>
 
   <!-- ============================================================
        JAVASCRIPT
        ============================================================ -->
   <script>
-    // ──────────────────────────────────────────────
-    // DATOS
-    // ──────────────────────────────────────────────
-    const DAYS    = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
-    const SHIFTS  = [
-      { id: 'mat', label: 'Matutino',   hours: '06:00 – 12:00' },
-      { id: 'ves', label: 'Vespertino', hours: '12:00 – 18:00' },
-      { id: 'noc', label: 'Nocturno',   hours: '18:00 – 00:00' },
-    ];
-    const RELEVO_LABELS = {
-      mat: '★  RELEVO 12:00 — Matutino → Vespertino  ★',
-      ves: '★  RELEVO 18:00 — Vespertino → Nocturno  ★',
-      noc: '★  RELEVO 06:00 — Nocturno → Matutino (siguiente día)  ★',
+    /* ============================================================
+       ⚙️  CONFIGURA FIREBASE AQUÍ
+       Pega los valores de tu proyecto Firebase.
+       Si lo dejas vacío, la app funciona con localStorage.
+       ============================================================ */
+    const FIREBASE_CONFIG = {
+      apiKey:            "AIzaSyBTW_NUstyCF89T5DsGhAjepRsG9fzicyY",
+      authDomain:        "horarios-hospital-38017.firebaseapp.com",
+      databaseURL:       "https://horarios-hospital-38017-default-rtdb.firebaseio.com",
+      projectId:         "horarios-hospital-38017",
+      storageBucket:     "horarios-hospital-38017.firebasestorage.app",
+      messagingSenderId: "204891141094",
+      appId:             "1:204891141094:web:cd50462967029fcb2b5c27"
     };
-    const RELEVO_CLASS = { mat: 'relevo-mat', ves: 'relevo-ves', noc: 'relevo-noc' };
+    /* ============================================================ */
 
-    // Estructura de datos: { "Lunes": { mat: ["Nombre"], ves: [], noc: [] }, ... }
-    let data = {};
+    // ── Constantes ──────────────────────────────────────────────
+    const DAYS   = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+    const SHIFTS = [
+      { id:'mat', label:'Matutino',   hours:'06:00 – 12:00' },
+      { id:'ves', label:'Vespertino', hours:'12:00 – 18:00' },
+      { id:'noc', label:'Nocturno',   hours:'18:00 – 00:00' },
+    ];
+    const RELEVO = {
+      mat: { text:'★  RELEVO 12:00 — Matutino → Vespertino  ★',         cls:'rel-mat' },
+      ves: { text:'★  RELEVO 18:00 — Vespertino → Nocturno  ★',         cls:'rel-ves' },
+      noc: { text:'★  RELEVO 06:00 — Nocturno → Matutino (siguiente día)  ★', cls:'rel-noc' },
+    };
 
-    function initData() {
-      DAYS.forEach(d => {
-        data[d] = {};
-        SHIFTS.forEach(s => { data[d][s.id] = []; });
+    // ── Estado ──────────────────────────────────────────────────
+    // data[day][shiftId] = "Nombre" | null
+    let data   = {};
+    let db     = null;
+    let usesFB = false;
+
+    function defaultData() {
+      const d = {};
+      DAYS.forEach(day => {
+        d[day] = {};
+        SHIFTS.forEach(s => { d[day][s.id] = null; });
       });
+      return d;
     }
 
-    // ──────────────────────────────────────────────
-    // PERSISTENCIA — URL hash + localStorage
-    // ──────────────────────────────────────────────
-    function saveData() {
+    // ── Firebase ─────────────────────────────────────────────────
+    function initFirebase() {
+      const cfg = FIREBASE_CONFIG;
+      if (!cfg.apiKey || !cfg.databaseURL) return false;
       try {
-        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-        localStorage.setItem('horario-hospital', encoded);
-        history.replaceState(null, '', '#' + encoded);
-      } catch(e) {}
+        firebase.initializeApp(cfg);
+        db = firebase.database();
+        return true;
+      } catch(e) { console.warn('Firebase init error:', e); return false; }
     }
 
-    function loadData() {
-      initData();
-      // Prioridad: URL hash (compartido) > localStorage
-      const hash = location.hash.slice(1);
-      const ls   = localStorage.getItem('horario-hospital');
-      const raw  = hash || ls;
-      if (!raw) return;
-      try {
-        const parsed = JSON.parse(decodeURIComponent(escape(atob(raw))));
-        // Merge safely
-        DAYS.forEach(d => {
+    function listenFirebase() {
+      db.ref('horario').on('value', snap => {
+        const val = snap.val() || {};
+        data = defaultData();
+        DAYS.forEach(day => {
           SHIFTS.forEach(s => {
-            if (parsed[d] && Array.isArray(parsed[d][s.id])) {
-              data[d][s.id] = parsed[d][s.id].filter(n => typeof n === 'string' && n.trim());
+            if (val[day] && typeof val[day][s.id] === 'string') {
+              data[day][s.id] = val[day][s.id] || null;
             }
           });
         });
-        if (hash) {
-          // Guardar en localStorage también para que persista si recargan sin hash
-          localStorage.setItem('horario-hospital', hash);
-        }
-      } catch(e) { console.warn('No se pudo cargar data:', e); }
-    }
-
-    // ──────────────────────────────────────────────
-    // RENDER
-    // ──────────────────────────────────────────────
-    function render() {
-      const grid = document.getElementById('schedule-grid');
-      grid.innerHTML = '';
-
-      // —— Cabecera de días ——
-      const corner = document.createElement('div');
-      corner.className = 'corner-cell';
-      grid.appendChild(corner);
-
-      DAYS.forEach((day, i) => {
-        const el = document.createElement('div');
-        el.className = 'day-cell-header ' + (i >= 5 ? 'weekend' : 'weekday');
-        el.textContent = day;
-        grid.appendChild(el);
+        render();
+      }, err => {
+        console.error('Firebase listener error:', err);
+        setConn('offline', 'Error de conexión');
       });
 
-      // —— Filas de turno ——
-      SHIFTS.forEach((shift, si) => {
+      // Presencia online/offline
+      db.ref('.info/connected').on('value', snap => {
+        if (snap.val()) setConn('online', 'En línea — sincronización activa');
+        else             setConn('offline', 'Sin conexión — reintentando...');
+      });
+    }
+
+    function fbSet(day, shiftId, name) {
+      const path = `horario/${day}/${shiftId}`;
+      (name ? db.ref(path).set(name) : db.ref(path).remove())
+        .catch(e => { toast('⚠️ Error al guardar: ' + e.message); });
+    }
+
+    // ── localStorage (fallback) ──────────────────────────────────
+    const LS_KEY = 'horario-hospital-v2';
+    function lsSave() {
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+    }
+    function lsLoad() {
+      data = defaultData();
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        DAYS.forEach(day => {
+          SHIFTS.forEach(s => {
+            if (parsed[day] && (typeof parsed[day][s.id] === 'string' || parsed[day][s.id] === null)) {
+              data[day][s.id] = parsed[day][s.id] || null;
+            }
+          });
+        });
+      } catch(e) {}
+    }
+
+    // ── Conexión UI ──────────────────────────────────────────────
+    function setConn(state, label) {
+      const dot  = document.getElementById('conn-dot');
+      const text = document.getElementById('conn-label');
+      dot.className  = 'conn-dot ' + state;
+      text.textContent = label;
+    }
+
+    // ── Render ───────────────────────────────────────────────────
+    function render() {
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
+
+      // Cabecera de días
+      const corner = el('div', 'corner'); grid.appendChild(corner);
+      DAYS.forEach((day, i) => {
+        const d = el('div', 'dh ' + (i >= 5 ? 'wknd' : 'wkd'));
+        d.textContent = day;
+        grid.appendChild(d);
+      });
+
+      // Filas de turno
+      SHIFTS.forEach(shift => {
         // Etiqueta lateral
-        const label = document.createElement('div');
-        label.className = `shift-label ${shift.id}`;
-        label.innerHTML = `
-          <span class="shift-name">${shift.label}</span>
-          <span class="shift-hours">${shift.hours}</span>
-        `;
-        grid.appendChild(label);
+        const lbl = el('div', 'slabel');
+        lbl.innerHTML = `<span class="sname">${shift.label}</span><span class="shours">${shift.hours}</span>`;
+        lbl.classList.add(shift.id); // para el color de fondo en CSS
+        // Nota: el color de fondo lo ponemos por la clase del padre .mat/.ves/.noc
+        // Creamos un wrapper de fila con esa clase
+        // En realidad con display:contents no se puede — así que forzamos el color aquí:
+        const bgMap = { mat:'var(--mat-bg)', ves:'var(--ves-bg)', noc:'var(--noc-bg)' };
+        const accMap= { mat:'var(--mat-acc)', ves:'var(--ves-acc)', noc:'var(--noc-acc)' };
+        lbl.style.background = bgMap[shift.id];
+        lbl.style.color      = accMap[shift.id];
+        grid.appendChild(lbl);
 
         // Celdas de días
         DAYS.forEach(day => {
-          const cell = document.createElement('div');
-          cell.className = `day-cell ${shift.id}`;
+          const cell = el('div', 'dcell');
+          cell.style.background = bgMap[shift.id];
+          const name = data[day] && data[day][shift.id];
 
-          // Nombres existentes
-          (data[day][shift.id] || []).forEach((name, ni) => {
-            const tag = document.createElement('div');
-            tag.className = 'name-tag';
-            tag.innerHTML = `
-              <span class="name-text">${escHtml(name)}</span>
-              <button class="remove-btn" title="Quitar" onclick="removeName('${escAttr(day)}','${shift.id}',${ni})">✕</button>
+          if (name) {
+            // Celda ocupada
+            const card = el('div', 'name-card');
+            card.innerHTML = `
+              <span class="name-text">${esc(name)}</span>
+              <button class="ic-btn edit" title="Editar" onclick="openModal('${esc(day)}','${shift.id}',true)">✏️</button>
+              <button class="ic-btn del"  title="Quitar"  onclick="removeName('${esc(day)}','${shift.id}')">✕</button>
             `;
-            cell.appendChild(tag);
-          });
-
-          // Botón agregar
-          const addBtn = document.createElement('button');
-          addBtn.className = 'add-btn';
-          addBtn.innerHTML = '＋ Agregar nombre';
-          addBtn.onclick = () => openModal(day, shift.id);
-          cell.appendChild(addBtn);
+            cell.appendChild(card);
+          } else {
+            // Celda vacía
+            const btn = el('button', 'add-btn');
+            btn.innerHTML = '＋ Agregar nombre';
+            btn.onclick = () => openModal(day, shift.id, false);
+            cell.appendChild(btn);
+          }
 
           grid.appendChild(cell);
         });
 
-        // Banner de relevo (después de cada turno)
-        const banner = document.createElement('div');
-        banner.className = `relevo-banner ${RELEVO_CLASS[shift.id]}`;
-        banner.textContent = RELEVO_LABELS[shift.id];
+        // Banner relevo
+        const banner = el('div', `relevo ${RELEVO[shift.id].cls}`);
+        banner.textContent = RELEVO[shift.id].text;
         grid.appendChild(banner);
       });
     }
 
-    // ──────────────────────────────────────────────
-    // MODAL
-    // ──────────────────────────────────────────────
-    let _pendingDay = null, _pendingShift = null;
+    // ── Modal ────────────────────────────────────────────────────
+    let _day = null, _shift = null, _editing = false;
 
-    function openModal(day, shiftId) {
-      _pendingDay   = day;
-      _pendingShift = shiftId;
-      const shift   = SHIFTS.find(s => s.id === shiftId);
-      document.getElementById('modal-title').textContent = `Agregar nombre — ${shift.label}`;
-      document.getElementById('modal-meta').textContent  = `${day} · ${shift.hours}`;
-      document.getElementById('modal-input').value = '';
-      document.getElementById('modal-overlay').classList.add('open');
-      setTimeout(() => document.getElementById('modal-input').focus(), 80);
+    function openModal(day, shiftId, editing) {
+      _day     = day;
+      _shift   = shiftId;
+      _editing = editing;
+      const shift = SHIFTS.find(s => s.id === shiftId);
+      document.getElementById('m-title').textContent =
+        (editing ? 'Editar nombre' : 'Agregar nombre') + ` — ${shift.label}`;
+      document.getElementById('m-meta').textContent = `${day} · ${shift.hours}`;
+      const inp = document.getElementById('m-input');
+      inp.value = editing ? (data[day][shiftId] || '') : '';
+      document.getElementById('overlay').classList.add('open');
+      setTimeout(() => inp.focus(), 80);
     }
 
     function closeModal() {
-      document.getElementById('modal-overlay').classList.remove('open');
-      _pendingDay = _pendingShift = null;
+      document.getElementById('overlay').classList.remove('open');
+      _day = _shift = null;
     }
 
-    function closeModalOnOverlay(e) {
-      if (e.target === document.getElementById('modal-overlay')) closeModal();
+    function overlayClick(e) {
+      if (e.target === document.getElementById('overlay')) closeModal();
     }
 
-    function confirmAdd() {
-      const name = document.getElementById('modal-input').value.trim();
-      if (!name) { shake(); return; }
-      if (!data[_pendingDay][_pendingShift]) data[_pendingDay][_pendingShift] = [];
-      data[_pendingDay][_pendingShift].push(name);
-      saveData();
-      render();
+    function confirmModal() {
+      const name = document.getElementById('m-input').value.trim();
+      if (!name) {
+        const inp = document.getElementById('m-input');
+        inp.style.borderColor = 'var(--red)';
+        setTimeout(() => inp.style.borderColor = '', 1100);
+        return;
+      }
+      setName(_day, _shift, name);
       closeModal();
-      showToast(`✅ "${name}" agregado al turno ${SHIFTS.find(s=>s.id===_pendingShift).label} del ${_pendingDay}`);
     }
 
-    function shake() {
-      const input = document.getElementById('modal-input');
-      input.style.borderColor = 'var(--red)';
-      input.style.animation = 'none';
-      setTimeout(() => { input.style.animation = ''; }, 10);
-      setTimeout(() => { input.style.borderColor = ''; }, 1200);
+    function removeName(day, shiftId) {
+      const name = data[day][shiftId];
+      setName(day, shiftId, null);
+      toast(`🗑 "${name}" eliminado`);
     }
 
-    function removeName(day, shiftId, index) {
-      const name = data[day][shiftId][index];
-      data[day][shiftId].splice(index, 1);
-      saveData();
-      render();
-      showToast(`🗑 "${name}" eliminado`);
+    // ── Set / Remove name ────────────────────────────────────────
+    function setName(day, shiftId, name) {
+      if (usesFB) {
+        fbSet(day, shiftId, name);
+        // Render lo hace el listener de Firebase
+      } else {
+        data[day][shiftId] = name;
+        lsSave();
+        render();
+        if (name) toast(`✅ ${name} → ${SHIFTS.find(s=>s.id===shiftId).label} del ${day}`);
+      }
     }
 
-    // ──────────────────────────────────────────────
-    // ACCIONES
-    // ──────────────────────────────────────────────
-    function printSchedule() {
-      document.getElementById('print-date-val').textContent =
-        new Date().toLocaleDateString('es-MX', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    // ── Acciones globales ────────────────────────────────────────
+    function clearAll() {
+      if (!confirm('¿Borrar todos los nombres del horario?')) return;
+      if (usesFB) {
+        db.ref('horario').remove().catch(e => toast('⚠️ Error: ' + e.message));
+      } else {
+        data = defaultData();
+        lsSave();
+        render();
+      }
+      toast('🗑 Horario limpiado');
+    }
+
+    function setPrintDate() {
+      document.getElementById('print-date').textContent =
+        'Generado el ' + new Date().toLocaleDateString('es-MX',
+          { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    }
+
+    function printLight() {
+      document.body.classList.remove('print-dark');
+      setPrintDate();
       window.print();
     }
 
-    function shareSchedule() {
-      saveData();
-      const url = location.href.split('#')[0] + '#' + btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-      navigator.clipboard.writeText(url).then(() => {
-        showToast('🔗 Link copiado al portapapeles — compártelo con tu equipo');
-      }).catch(() => {
-        prompt('Copia este link y compártelo:', url);
+    function printDark() {
+      document.documentElement.classList.add('print-dark');
+      document.body.classList.add('print-dark');
+      setPrintDate();
+      // Pequeño delay para que el CSS aplique antes de abrir el diálogo
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          window.print();
+          window.addEventListener('afterprint', () => {
+            document.documentElement.classList.remove('print-dark');
+            document.body.classList.remove('print-dark');
+          }, { once: true });
+        }, 80);
       });
     }
 
-    function clearAll() {
-      if (!confirm('¿Seguro que quieres borrar todos los nombres?')) return;
-      initData();
-      saveData();
-      render();
-      showToast('🗑 Horario limpiado');
-    }
-
-    // ──────────────────────────────────────────────
-    // TOAST
-    // ──────────────────────────────────────────────
-    let _toastTimer;
-    function showToast(msg) {
+    // ── Toast ────────────────────────────────────────────────────
+    let _tt;
+    function toast(msg) {
       const t = document.getElementById('toast');
       t.textContent = msg;
       t.classList.add('show');
-      clearTimeout(_toastTimer);
-      _toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+      clearTimeout(_tt);
+      _tt = setTimeout(() => t.classList.remove('show'), 3200);
     }
 
-    // ──────────────────────────────────────────────
-    // HELPERS
-    // ──────────────────────────────────────────────
-    function escHtml(s) {
-      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    // ── Helpers ──────────────────────────────────────────────────
+    function el(tag, cls) {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      return e;
     }
-    function escAttr(s) { return s.replace(/'/g,"\\'"); }
+    function esc(s) {
+      return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+        .replace(/'/g,'&#39;');
+    }
 
-    // ──────────────────────────────────────────────
-    // TECLADO
-    // ──────────────────────────────────────────────
+    // ── Teclado ──────────────────────────────────────────────────
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') closeModal();
     });
 
-    // ──────────────────────────────────────────────
-    // INIT
-    // ──────────────────────────────────────────────
-    loadData();
-    render();
+    // ── Init ─────────────────────────────────────────────────────
+    usesFB = initFirebase();
+
+    if (usesFB) {
+      setConn('local', 'Conectando...');
+      listenFirebase();
+      document.getElementById('setup-banner').style.display = 'none';
+    } else {
+      // Sin Firebase — modo local
+      document.getElementById('setup-banner').style.display = 'block';
+      setConn('local', 'Modo local — solo este navegador');
+      lsLoad();
+      render();
+    }
   </script>
 </body>
 </html>
