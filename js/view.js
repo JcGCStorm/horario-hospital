@@ -174,7 +174,7 @@ export class View {
         
         // Vista Renderizada (Markdown)
         const renderedView = this.el('div', 'md-content');
-        renderedView.innerHTML = window.marked ? window.marked.parse(cat.content || '*Aún no hay información.*') : this.esc(cat.content || 'Aún no hay información.');
+        renderedView.innerHTML = window.marked ? window.marked.parse(cat.content || '*Aún no hay información.*', { breaks: true }) : this.esc(cat.content || 'Aún no hay información.');
         
         // Editor View
         const editorView = this.el('div', 'editor-view');
@@ -217,7 +217,7 @@ export class View {
           editorView.style.display = 'none';
           renderedView.style.display = 'block';
           btnEdit.style.display = 'inline-flex';
-          renderedView.innerHTML = window.marked ? window.marked.parse(textarea.value || '*Aún no hay información.*') : this.esc(textarea.value || 'Aún no hay información.');
+          renderedView.innerHTML = window.marked ? window.marked.parse(textarea.value || '*Aún no hay información.*', { breaks: true }) : this.esc(textarea.value || 'Aún no hay información.');
         };
         
         editorView.appendChild(textarea);
@@ -246,7 +246,7 @@ export class View {
           // Solo actualizamos si el usuario no está editando activamente ESTE textarea
           if (document.activeElement !== textarea) {
             textarea.value = cat.content || '';
-            renderedView.innerHTML = window.marked ? window.marked.parse(cat.content || '*Aún no hay información.*') : this.esc(cat.content || 'Aún no hay información.');
+            renderedView.innerHTML = window.marked ? window.marked.parse(cat.content || '*Aún no hay información.*', { breaks: true }) : this.esc(cat.content || 'Aún no hay información.');
           }
         }
       });
