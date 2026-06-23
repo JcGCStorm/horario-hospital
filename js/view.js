@@ -148,39 +148,109 @@ export class View {
 
   // --- Render Notes (Expediente) ---
   renderNotes(categories, onNotesInput) {
-    this.notesContainer.innerHTML = '';
-    categories.forEach((cat, index) => {
-      const acc = this.el('div', 'accordion');
-      
-      const header = this.el('div', 'accordion-header');
-      header.innerHTML = `
-        <h3>${this.esc(cat.title)}</h3>
-        <span class="accordion-icon">▼</span>
-      `;
-      header.onclick = () => acc.classList.toggle('open');
-      
-      const content = this.el('div', 'accordion-content');
-      const textarea = this.el('textarea', '');
-      textarea.placeholder = `Escribe aquí la información para: ${this.esc(cat.title)}`;
-      textarea.value = cat.content || '';
-      
-      let debounceTimeout;
-      textarea.addEventListener('input', (e) => {
-        clearTimeout(debounceTimeout);
-        debounceTimeout = setTimeout(() => {
-          onNotesInput(cat.id, e.target.value);
-        }, 800);
+    // Verificar si la estructura (IDs y Títulos) cambió para evitar recrear todo y perder foco
+    const currentStructure = Array.from(this.notesContainer.children).map(child => ({
+      id: child.dataset.id,
+      title: child.querySelector('h3').textContent
+    }));
+
+    const newStructure = categories.map(c => ({ id: c.id, title: c.title }));
+    const isSameStructure = JSON.stringify(currentStructure) === JSON.stringify(newStructure);
+
+    if (!isSameStructure) {
+      this.notesContainer.innerHTML = '';
+      categories.forEach((cat, index) => {
+        const acc = this.el('div', 'accordion');
+        acc.dataset.id = cat.id;
+        
+        const header = this.el('div', 'accordion-header');
+        header.innerHTML = `
+          <h3>${this.esc(cat.title)}</h3>
+          <span class="accordion-icon">▼</span>
+        `;
+        header.onclick = () => acc.classList.toggle('open');
+        
+        const content = this.el('div', 'accordion-content');
+        
+        // Vista Renderizada (Markdown)
+        const renderedView = this.el('div', 'md-content');
+        renderedView.innerHTML = window.marked ? window.marked.parse(cat.content || '*Aún no hay información.*') : this.esc(cat.content || 'Aún no hay información.');
+        
+        // Editor View
+        const editorView = this.el('div', 'editor-view');
+        editorView.style.display = 'none';
+        
+        const textarea = this.el('textarea', '');
+        textarea.placeholder = `Escribe aquí la información para: ${this.esc(cat.title)}\nPuedes usar Markdown (**, *, #, etc.)`;
+        textarea.value = cat.content || '';
+        
+        let debounceTimeout;
+        textarea.addEventListener('input', (e) => {
+          clearTimeout(debounceTimeout);
+          debounceTimeout = setTimeout(() => {
+            onNotesInput(cat.id, e.target.value);
+          }, 800);
+        });
+        
+        // Botones de toggle
+        const btnEdit = this.el('button', 'btn');
+        btnEdit.style.marginTop = '0.8rem';
+        btnEdit.style.background = 'rgba(189,147,249,0.15)';
+        btnEdit.style.color = 'var(--purple)';
+        btnEdit.style.border = '1px solid rgba(189,147,249,0.4)';
+        btnEdit.innerHTML = '✏️ Editar Notas';
+        
+        const btnSave = this.el('button', 'btn');
+        btnSave.style.marginTop = '0.5rem';
+        btnSave.style.background = 'var(--green)';
+        btnSave.style.color = '#000';
+        btnSave.innerHTML = '👁 Ver Formato';
+
+        btnEdit.onclick = () => {
+          renderedView.style.display = 'none';
+          btnEdit.style.display = 'none';
+          editorView.style.display = 'block';
+          textarea.focus();
+        };
+
+        btnSave.onclick = () => {
+          editorView.style.display = 'none';
+          renderedView.style.display = 'block';
+          btnEdit.style.display = 'inline-flex';
+          renderedView.innerHTML = window.marked ? window.marked.parse(textarea.value || '*Aún no hay información.*') : this.esc(textarea.value || 'Aún no hay información.');
+        };
+        
+        editorView.appendChild(textarea);
+        editorView.appendChild(btnSave);
+
+        content.appendChild(renderedView);
+        content.appendChild(btnEdit);
+        content.appendChild(editorView);
+        
+        acc.appendChild(header);
+        acc.appendChild(content);
+        
+        // Primera categoría abierta por defecto
+        if (index === 0) acc.classList.add('open');
+        
+        this.notesContainer.appendChild(acc);
       });
-      
-      content.appendChild(textarea);
-      acc.appendChild(header);
-      acc.appendChild(content);
-      
-      // Primera categoría abierta por defecto
-      if (index === 0) acc.classList.add('open');
-      
-      this.notesContainer.appendChild(acc);
-    });
+    } else {
+      // Misma estructura, solo actualizar contenidos de forma segura
+      categories.forEach((cat) => {
+        const acc = this.notesContainer.querySelector(`.accordion[data-id="${cat.id}"]`);
+        if (acc) {
+          const textarea = acc.querySelector('textarea');
+          const renderedView = acc.querySelector('.md-content');
+          
+          // Solo actualizamos si el usuario no está editando activamente ESTE textarea
+          if (document.activeElement !== textarea) {
+            textarea.value = cat.content || '';
+            renderedView.innerHTML = window.marked ? window.marked.parse(cat.content || '*Aún no hay información.*') : this.esc(cat.content || 'Aún no hay información.');
+          }
+        }
+      });
+    }
   }
 
   toggleView(viewName) {
