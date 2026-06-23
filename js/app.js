@@ -1,6 +1,6 @@
-import { Model } from './model.js';
-import { View } from './view.js';
-import { Controller } from './controller.js';
+import { Model } from './model.js?v=2';
+import { View } from './view.js?v=2';
+import { Controller } from './controller.js?v=2';
 
 document.addEventListener('DOMContentLoaded', () => {
   const model = new Model();
